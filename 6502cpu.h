@@ -1,6 +1,3 @@
-//
-//
-
 #ifndef NES_EMULATOR_6502CPU_H
 #define NES_EMULATOR_6502CPU_H
 #include <stdint.h>
@@ -13,7 +10,7 @@ struct INSTRUCTION {
     uint8_t (*addrmode)(struct cpu* cpu);
     uint8_t cycles;
 
-} INSTRUCTION;
+};
 struct cpu {
 
     //registers
@@ -108,29 +105,6 @@ uint8_t TAY(struct cpu* cpu); uint8_t TSX(struct cpu* cpu); uint8_t TXA(struct c
 uint8_t TXS(struct cpu* cpu); uint8_t TYA(struct cpu* cpu);
 
 uint8_t XXX(struct cpu* cpu); //catch all in case stuff breaks same as NOP
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 #endif //NES_EMULATOR_6502CPU_H

@@ -3,6 +3,7 @@
 
 #ifndef NES_EMULATOR_BUS_H
 #define NES_EMULATOR_BUS_H
+
 #include <stdint.h>
 
 #include "6502cpu.h"

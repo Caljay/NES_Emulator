@@ -1,9 +1,4 @@
-//
-//
-
 #include "6502cpu.h"
-
-#include <stdlib.h>
 
 #include "Bus.h"
 
@@ -302,7 +297,7 @@ void cpu_reset(struct cpu *cpu) {
 
 
 
-}
+} //reset the cpu to a known state
 
 //not clock cycle accurate
 void cpu_clock(struct cpu *cpu) {
@@ -326,7 +321,7 @@ void cpu_clock(struct cpu *cpu) {
 
     }
     cpu->cycles--;
-}
+} //clock the cpu
 
 void cpu_irq(struct cpu *cpu) {
     if (get_flag(cpu, I) == 0) {
@@ -354,7 +349,7 @@ void cpu_irq(struct cpu *cpu) {
 
 
 
-}
+} //interrupt request
 
 void cpu_nmi(struct cpu *cpu) {
 
@@ -379,18 +374,26 @@ void cpu_nmi(struct cpu *cpu) {
     cpu->cycles = 7;
 
 
-}
+} //not maskable interrupt
 
 uint8_t get_flag(struct cpu *cpu, enum FLAGS6502 flag) {
-        #error  "get_flag is not yet implemented"
+
+    return ((cpu->status & flag) > 0) ? 1 : 0;
+
     }
 void set_flag(struct cpu *cpu, enum FLAGS6502 flag, uint8_t enable) {
-    uint8_t temp = cpu->status;
-    cpu->status = 0x0000;
-    cpu->status = (flag) | temp;
-    #error  "set_flag is not yet implemented"
+    if (enable) {
+        cpu->status |= flag;
+    }
+    else {
+        cpu->status &= ~flag;
+    }
 
 }
+
+
+
+
 
 // ADDRESSING MODES (look at datasheet)
 //open a function to see more details on the addressing mode
@@ -441,9 +444,10 @@ uint8_t ZPY(struct cpu* cpu) {
 uint8_t ABS(struct cpu* cpu) {
     //absolute adressing, second byte gives high bits, third gives low bits
 
-    uint8_t high = cpu_read_bus(cpu, cpu->pc);
-    cpu->pc++;
+    //wrong order was intially used, should be fixed now (9/14/2025)
     uint8_t low = cpu_read_bus(cpu, cpu->pc);
+    cpu->pc++;
+    uint8_t high = cpu_read_bus(cpu, cpu->pc);
     cpu->pc++;
     cpu->addr_abs = (high << 8) | low; //this is a really clever usage of bitwise operations
 
@@ -554,7 +558,7 @@ return 0;
 //data resudes at addr_abs
 uint8_t fetch(struct cpu* cpu) {
     //if this is not implied mode
-if (!(cpu->lookup[cpu->opcode].addrmode == &IMP)) {
+if (! (cpu->lookup[cpu->opcode].addrmode == &IMP) ) {
     cpu->fetched = cpu_read_bus(cpu, cpu->addr_abs);
 }
     return cpu->fetched;
@@ -617,7 +621,55 @@ return 0;
 
 } //BIT Test (this one may not work properly, not sure yet)
 
+//STACK 0x0100 is the base offset
+uint8_t PHA(struct cpu* cpu) {
+    cpu_write_bus(cpu,0x0100+cpu->sp,cpu->a );
+    cpu->sp--;
+    return 0;
+} //push a
+uint8_t PLA(struct cpu* cpu) {
+    cpu->sp++;
+    cpu->a = cpu_read_bus(cpu, 0x0100+cpu->sp);
+    set_flag(cpu, Z, cpu->a == 0);
+    set_flag(cpu, N, cpu->a & 0x80);
+    return 0;
 
+
+
+} //pull a
+uint8_t PHP(struct cpu* cpu) {
+
+    cpu_write_bus(cpu, 0x0100+cpu->sp, cpu->status | B | U);
+    cpu->sp--;
+    set_flag(cpu, B, 0);
+    set_flag(cpu, U, 0);
+    return 0;
+
+
+
+}//push processor status
+uint8_t PLP(struct cpu* cpu) {
+    cpu->sp++;
+    cpu->status = cpu_read_bus(cpu, 0x0100+cpu->sp);
+    set_flag(cpu, B, 0);
+    set_flag(cpu, U, 0);
+    return 0;
+
+
+} //pull processor status
+uint8_t TXS(struct cpu* cpu) {
+    cpu->sp = cpu->x;
+    return 0;
+} //transfer X to sp
+uint8_t TSX(struct cpu* cpu) {
+    cpu->x = cpu->sp;
+
+    set_flag(cpu, Z, !(cpu->x));
+    set_flag(cpu, N, cpu->x & 0x80);
+
+
+    return 0;
+} //transfer sp to X
 
 //BRANCHING INSTRUCTIONS
 uint8_t BCS(struct cpu* cpu) {
@@ -718,12 +770,59 @@ uint8_t BVS(struct cpu* cpu) {
     return 0;
 } //branch if overflow set
 
-
 //JUMPING
-uint8_t JMP(struct cpu* cpu);
-uint8_t BRK(struct cpu* cpu);
-uint8_t JSR(struct cpu* cpu);
-uint8_t RTS(struct cpu* cpu);
+uint8_t JMP(struct cpu* cpu) {
+    cpu->pc = cpu->addr_abs;
+    return 0;
+
+
+} //jump to memory location
+uint8_t BRK(struct cpu* cpu) {
+    //push PC + 2 to stack
+    //push flags to stack]
+    //PC = FFFE
+        cpu->pc++;
+
+    cpu_write_bus(cpu, cpu->sp, (cpu->pc >> 8) & 0x00FF);
+    cpu->sp--;
+    cpu_write_bus(cpu, cpu->sp, cpu->pc & 0x00FF);
+    cpu->sp--;
+
+    cpu->pc = cpu->addr_abs;
+
+    set_flag(cpu, I, 1);
+
+    cpu_write_bus(cpu, cpu->sp, cpu->status | B | U);
+    set_flag(cpu, I, 1);
+
+    cpu->pc = 0xFFFE;
+
+    return 0;
+
+
+} //break software IRQ (might not be correct)
+uint8_t JSR(struct cpu* cpu) {
+    //push PC + 2 to stack
+    //pc = memory
+    cpu_write_bus(cpu, cpu->sp, (cpu->pc >> 8) & 0x00FF);
+    cpu->sp--;
+    cpu_write_bus(cpu, cpu->sp, cpu->pc & 0x00FF);
+    cpu->sp--;
+    cpu->pc = cpu->addr_abs;
+    return 0;
+
+
+} //jump to subroutine
+uint8_t RTS(struct cpu* cpu) {
+    cpu->sp++;
+   cpu->pc = cpu_read_bus(cpu, 0x0100+cpu->sp);
+    cpu->sp++;
+    cpu->pc |= (uint16_t)(cpu_read_bus(cpu, 0x0100+cpu->sp) << 8);
+    cpu->pc++;
+    return 0;
+
+
+} //return from subroutine
 
 //INTERUPTS
 uint8_t RTI(struct cpu* cpu) {
@@ -738,7 +837,6 @@ uint8_t RTI(struct cpu* cpu) {
     return 0;
 
 } //return from int
-
 
 //FLAG OPERATIONS
 uint8_t CLC(struct cpu* cpu) {
@@ -770,8 +868,6 @@ uint8_t SEI(struct cpu* cpu){
 
 } //set disable interrupt
 
-
-
 //ADDITION AND SUBTRACTION AND ARITHMETIC
 uint8_t ADC(struct cpu* cpu) {
 
@@ -793,14 +889,14 @@ uint8_t ADC(struct cpu* cpu) {
 
 
 
-}
+} //add A, memory and C
 uint8_t SBC(struct cpu* cpu) {
 
     fetch(cpu);
     uint16_t value = ((uint16_t)cpu->fetched) ^ 0x00FF;
 
     uint16_t temp = (uint16_t)cpu->a + (uint16_t)value + (uint16_t)get_flag(cpu, C);
-    set_flag(cpu, C, temp & 0xFF00);
+    set_flag(cpu, C, (uint8_t)(temp & 0xFF00));
     set_flag(cpu, Z, (temp & 0x00FF) == 0);
     set_flag(cpu, N, temp & 0x0080);
     set_flag(cpu, V, (temp ^ (uint16_t)cpu->a & (temp ^ value) & 0x0080));
@@ -809,14 +905,14 @@ uint8_t SBC(struct cpu* cpu) {
     return 1;
 
 
-}
+} //subtract A - memory - !C
 uint8_t DEC(struct cpu* cpu) {
     fetch(cpu);
     uint8_t temp = cpu->fetched;
     temp--;
     set_flag(cpu, Z, !temp);
     set_flag(cpu, N, temp&0x80);
-    write_to_bus(cpu, cpu->addr_abs, temp);
+    cpu_write_bus(cpu, cpu->addr_abs, temp);
     return 0;
 } //decrement memory location
 uint8_t DEX(struct cpu* cpu) {
@@ -842,7 +938,7 @@ uint8_t INC(struct cpu* cpu) {
     temp++;
     set_flag(cpu, Z, !temp);
     set_flag(cpu, N, temp&0x80);
-    write_to_bus(cpu, cpu->addr_abs, temp);
+    cpu_write_bus(cpu, cpu->addr_abs, temp);
     return 0;
 
 
@@ -865,61 +961,6 @@ uint8_t INY(struct cpu* cpu) {
     set_flag(cpu, N, cpu->y & 0x80);
     return 0;
 } //increment Y
-
-
-
-//STACK 0x0100 is the base offset
-uint8_t PHA(struct cpu* cpu) {
-    cpu_write_bus(cpu,0x0100+cpu->sp,cpu->a );
-    cpu->sp--;
-    return 0;
-} //push a
-uint8_t PLA(struct cpu* cpu) {
-    cpu->sp++;
-    cpu->a = cpu_read_bus(cpu, 0x0100+cpu->sp);
-    set_flag(cpu, Z, cpu->a == 0);
-    set_flag(cpu, N, cpu->a & 0x80);
-    return 0;
-
-
-
-} //pull a
-uint8_t PHP(struct cpu* cpu) {
-
-    cpu_write_bus(cpu, 0x0100+cpu->sp, cpu->status | B | U);
-    cpu->sp--;
-    set_flag(cpu, B, 0);
-    set_flag(cpu, U, 0);
-    return 0;
-
-
-
-}//push processor status
-uint8_t PLP(struct cpu* cpu) {
-    cpu->sp++;
-    cpu->status = read_from_bus(cpu, 0x0100+cpu->sp);
-    set_flag(cpu, B, 0);
-    set_flag(cpu, U, 0);
-    return 0;
-
-
-} //pull processor status
-uint8_t TXS(struct cpu* cpu) {
-    cpu->sp = cpu->x;
-    return 0;
-} //transfer X to sp
-uint8_t TSX(struct cpu* cpu) {
-    cpu->x = cpu->sp;
-
-    set_flag(cpu, Z, !(cpu->x));
-    set_flag(cpu, N, cpu->x & 0x80);
-
-
-    return 0;
-} //transfer sp to X
-
-
-
 
 //COMPARE
 uint8_t CMP(struct cpu* cpu) {
@@ -1048,24 +1089,76 @@ return 0;
 }//ROTATE RIGHT
 
 //ACCESS
-uint8_t LDA(struct cpu* cpu);
-uint8_t STA(struct cpu* cpu);
-uint8_t LDX(struct cpu* cpu);
-uint8_t STX(struct cpu* cpu);
-uint8_t LDY(struct cpu* cpu);
-uint8_t STY(struct cpu* cpu);
+uint8_t LDA(struct cpu* cpu) {
+    //loads memory address into A
+    fetch(cpu);
+    set_flag(cpu, Z, cpu->fetched == 0x00);
+    set_flag(cpu, N, cpu->fetched & 0x80);
+    cpu->a = cpu->fetched;
+
+    return 1;
+
+
+
+} //load A
+uint8_t STA(struct cpu* cpu) {
+    //stores A into memory location
+    cpu_write_bus(cpu, cpu->addr_abs, cpu->a);
+    return 0;
+
+} //store A
+uint8_t LDX(struct cpu* cpu) {
+    fetch(cpu);
+    set_flag(cpu, Z, cpu->fetched == 0x00);
+    set_flag(cpu, N, cpu->fetched & 0x80);
+    cpu->x = cpu->fetched;
+
+    return 1;
+} //load X
+uint8_t STX(struct cpu* cpu) {
+    cpu_write_bus(cpu, cpu->addr_abs, cpu->x);
+    return 0;
+} //store X
+uint8_t LDY(struct cpu* cpu) {
+    fetch(cpu);
+    set_flag(cpu, Z, cpu->fetched == 0x00);
+    set_flag(cpu, N, cpu->fetched & 0x80);
+    cpu->y = cpu->fetched;
+
+    return 1;
+} //load Y
+uint8_t STY(struct cpu* cpu) {
+    cpu_write_bus(cpu, cpu->addr_abs, cpu->y);
+    return 0;
+} //store Y
 
 //TRANSFER
-uint8_t TAX(struct cpu* cpu);
-uint8_t TAY(struct cpu* cpu);
-uint8_t TYA(struct cpu* cpu);
-uint8_t TXA(struct cpu* cpu);
+uint8_t TAX(struct cpu* cpu) {
+    cpu->x = cpu->a;
+    set_flag(cpu, Z, cpu->x == 0x00);
+    set_flag(cpu, N, cpu->x & 0x80);
+    return 0;
 
 
-
-
-
-
+} //transfer A to X
+uint8_t TAY(struct cpu* cpu) {
+    cpu->y = cpu->a;
+    set_flag(cpu, Z, cpu->y == 0x00);
+    set_flag(cpu, N, cpu->y & 0x80);
+    return 0;
+} //transfer A to y
+uint8_t TYA(struct cpu* cpu) {
+    cpu->a = cpu->y;
+    set_flag(cpu, Z, cpu->a == 0x00);
+    set_flag(cpu, N, cpu->a & 0x80);
+    return 0;
+} //transfer y to a
+uint8_t TXA(struct cpu* cpu) {
+    cpu->a = cpu->x;
+    set_flag(cpu, Z, cpu->a == 0x00);
+    set_flag(cpu, N, cpu->a & 0x80);
+    return 0;
+} //transfer x to a
 
 //NOP and Catch All
 uint8_t NOP(struct cpu* cpu) { //this apparently contaisn otehr nops?
