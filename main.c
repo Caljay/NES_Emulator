@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include "6502cpu.h"
 #include "Bus.h"
+#include <raylib.h>
+
+#include "DebugAndTesting/nes_debug.h"
 
 void load_program(struct cpu* cpu) {
     uint16_t snake[] =  { 0x20, 0x06, 0x06, 0x20, 0x38, 0x06, 0x20, 0x0d, 0x06, 0x20, 0x2a, 0x06, 0x60, 0xa9, 0x02, 0x85,
@@ -49,13 +52,19 @@ cpu_reset(cpu);
 
 }
 int main(void) {
-    struct Bus bus;
-    bus_init(&bus);
-    struct cpu cpu = bus.cpu;
+
+    struct Bus nes;
+    bus_init(&nes);
+    struct cpu cpu = nes.cpu;
     load_program(&cpu);
-   // cpu_reset(&cpu);
+
+    init_debug_window();
+
     int i = 250;
     while (i > 0) {
+    WaitTime(0.125f);
+        write_nes_debug(&cpu);
+
         if (cpu.cycles == 0) {
             cpu_clock(&cpu);
             i--;
@@ -68,11 +77,11 @@ int main(void) {
 
       //  getchar();
     }
-    printf("A reg: %d\n", cpu.a );
-    printf("X reg: %d\n", cpu.x );
-    printf("Y reg: %d\n", cpu.y );
-
-    printf("Hello, World!\n");
+    // printf("A reg: %d\n", cpu.a );
+    // printf("X reg: %d\n", cpu.x );
+    // printf("Y reg: %d\n", cpu.y );
+    //
+    // printf("Hello, World!\n");
     return 0;
 }
 
