@@ -29,6 +29,10 @@ add_executable(Emulator main.c
         DebugAndTesting/nes_debug.h
         DebugAndTesting/nes_debug.c
         DebugAndTesting/nes_debug.h
+        ppu.c
+        ppu.h
+        cartridge.c
+        cartridge.h
 
 )
 

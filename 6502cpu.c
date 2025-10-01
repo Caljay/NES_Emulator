@@ -2,7 +2,7 @@
 
 #include "Bus.h"
 
-
+# warning CPU FAILS ILLEGALOPCODE LAX
 
 void init_cpu(struct cpu *cpu) {
 cpu->lookup[0] = (struct INSTRUCTION){ &BRK, &IMM, 7 };
@@ -804,20 +804,29 @@ uint8_t BRK(struct cpu* cpu) {
 uint8_t JSR(struct cpu* cpu) {
     //push PC + 2 to stack
     //pc = memory
-    cpu_write_bus(cpu, cpu->sp, (cpu->pc >> 8) & 0x00FF);
+    cpu->pc--; //bug fix 09/30/2025
+
+    //other bugfixes 09/30/2025 - forgot the include the sp offset
+    cpu_write_bus(cpu, 0x0100+cpu->sp, (cpu->pc >> 8) & 0x00FF);
+
     cpu->sp--;
-    cpu_write_bus(cpu, cpu->sp, cpu->pc & 0x00FF);
+
+    cpu_write_bus(cpu, 0x0100+cpu->sp, cpu->pc & 0x00FF);
+
+
     cpu->sp--;
     cpu->pc = cpu->addr_abs;
+
+
     return 0;
 
 
 } //jump to subroutine
 uint8_t RTS(struct cpu* cpu) {
     cpu->sp++;
-   cpu->pc = cpu_read_bus(cpu, 0x0100+cpu->sp);
+   cpu->pc = (uint16_t)cpu_read_bus(cpu, 0x0100+cpu->sp);
     cpu->sp++;
-    cpu->pc |= (uint16_t)(cpu_read_bus(cpu, 0x0100+cpu->sp) << 8);
+    cpu->pc |= (uint16_t)cpu_read_bus(cpu, 0x0100+cpu->sp) << 8;
     cpu->pc++;
     return 0;
 

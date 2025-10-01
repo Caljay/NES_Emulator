@@ -30,11 +30,21 @@ if (WindowShouldClose()) {
     DrawText(format, 1200, 0, 28, WHITE);
     Image target = GenImageColor(32, 32, WHITE);
 
+    for (int i = 0; i < 32; i++) {
+        for (int j = 0; j < 32; j++) {
+            ImageDrawPixel(&target, i,j, i % 2 == 0 ? (j%3 == 0 ? RED : WHITE) : (i % 3 == 0 ? BLUE : WHITE));
+
+        }
+    }
+
+
+
 
 
 
     ExportImage(target, "picture.jpg");
-    DrawTextureEx(LoadTextureFromImage(target), (Vector2){250, 250},0, 2, RED);
+    DrawTextureEx(LoadTextureFromImage(target), (Vector2){250, 250},0, 20, WHITE);
+    //target = LoadImageFromTexture()
 
 
 
